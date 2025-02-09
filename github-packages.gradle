@@ -1,0 +1,13 @@
+applyGlobalScript("Property.gradle")
+repositories {
+    maven {
+        url = uri("https://maven.pkg.github.com/Grass-Block/GradlePackages")
+        credentials {
+            username = globalProperty("gpr.user")
+            password = globalProperty("gpr.key")
+        }
+    }
+    maven {
+        url = 'https://repo.extendedclip.com/content/repositories/placeholderapi/'
+    }
+}
