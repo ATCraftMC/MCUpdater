@@ -2,4 +2,5 @@ rootProject.name = 'MCUpdater'
 include 'client'
 include 'server'
 include 'common'
+include 'installer'
 

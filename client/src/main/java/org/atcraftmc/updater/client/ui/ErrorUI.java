@@ -1,33 +1,63 @@
 package org.atcraftmc.updater.client.ui;
 
+import org.atcraftmc.updater.client.util.UI;
+import org.atcraftmc.updater.client.util.UIHandle;
+
 import javax.swing.*;
 import javax.swing.plaf.FontUIResource;
 import javax.swing.text.StyleContext;
 import java.awt.*;
-import java.text.SimpleDateFormat;
+import java.net.ConnectException;
 import java.util.Locale;
 
-public final class UpdateViewingUI {
-    private JTextArea text;
-    private JLabel version;
-    private JButton confirmButton;
+public final class ErrorUI extends UI<ErrorUI> {
     private JPanel root;
+    private JButton exit;
+    private JButton close;
+    private JTextArea text;
 
-    public UpdateViewingUI(String version, String log, long timestamp) {
-        this.version.setText(this.version.getText().formatted(version, new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(timestamp)));
-        this.text.setText(log);
+    public ErrorUI(Throwable throwable) {
+        this.exit.addActionListener(actionEvent -> System.exit(0));
+        this.close.addActionListener(actionEvent -> this.handle().close());
+        this.text.setEditable(false);
+
+        var builder = new StringBuilder();
+        var message = throwable.getMessage();
+
+        if (throwable instanceof ConnectException || message.contains("Connection refused")) {
+            builder.append("无法连接到更新服务器, 请检查网络或联系管理员。\n\n");
+        } else {
+            builder.append(message).append("发生了内部错误, 请向管理员反馈情况。\n");
+        }
+
+        builder.append("\n");
+        builder.append("错误信息: ").append(throwable.getMessage()).append("\n");
+        builder.append("堆栈信息: ").append("\n");
+
+        for (var element : throwable.getStackTrace()) {
+            builder.append(" -> ")
+                    .append(element.getClassName())
+                    .append(":")
+                    .append(element.getMethodName())
+                    .append("[")
+                    .append(element.getLineNumber())
+                    .append("]")
+                    .append("\n");
+        }
+
+        this.text.setText(builder.toString());
     }
 
-    public static void view(String version, String log, long timestamp) {
-        var frame = new JFrame("版本日志");
-        var ui = new UpdateViewingUI(version, log, timestamp);
-        frame.setContentPane(ui.root);
-        frame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
-        frame.setResizable(false);
-        frame.setSize(450, 650);
-        frame.setVisible(true);
+    public static UIHandle<ErrorUI> open(Throwable t) {
+        return new UIHandle<>(new ErrorUI(t));
+    }
 
-        ui.confirmButton.addActionListener((e) -> frame.setVisible(false));
+    @Override
+    public void build(JFrame frame) {
+        frame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+        frame.setContentPane(this.root);
+        frame.setSize(600, 800);
+        frame.setResizable(false);
     }
 
     {
@@ -49,26 +79,30 @@ public final class UpdateViewingUI {
         root.setLayout(new GridBagLayout());
         text = new JTextArea();
         text.setEditable(false);
+        Font textFont = this.$$$getFont$$$(null, -1, 14, text.getFont());
+        if (textFont != null) {
+            text.setFont(textFont);
+        }
         GridBagConstraints gbc;
         gbc = new GridBagConstraints();
         gbc.gridx = 1;
         gbc.gridy = 3;
-        gbc.gridwidth = 3;
+        gbc.gridwidth = 4;
         gbc.weightx = 1.0;
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.BOTH;
         root.add(text, gbc);
         final JPanel spacer1 = new JPanel();
         gbc = new GridBagConstraints();
-        gbc.gridx = 4;
+        gbc.gridx = 5;
         gbc.gridy = 3;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         root.add(spacer1, gbc);
         final JPanel spacer2 = new JPanel();
         gbc = new GridBagConstraints();
         gbc.gridx = 1;
-        gbc.gridy = 6;
-        gbc.gridwidth = 3;
+        gbc.gridy = 5;
+        gbc.gridwidth = 4;
         gbc.fill = GridBagConstraints.VERTICAL;
         root.add(spacer2, gbc);
         final JPanel spacer3 = new JPanel();
@@ -81,7 +115,7 @@ public final class UpdateViewingUI {
         gbc = new GridBagConstraints();
         gbc.gridx = 1;
         gbc.gridy = 2;
-        gbc.gridwidth = 3;
+        gbc.gridwidth = 4;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         root.add(spacer4, gbc);
         final JLabel label1 = new JLabel();
@@ -89,7 +123,7 @@ public final class UpdateViewingUI {
         if (label1Font != null) {
             label1.setFont(label1Font);
         }
-        label1.setText("更新日志");
+        label1.setText("发生错误！");
         gbc = new GridBagConstraints();
         gbc.gridx = 1;
         gbc.gridy = 1;
@@ -99,47 +133,44 @@ public final class UpdateViewingUI {
         gbc = new GridBagConstraints();
         gbc.gridx = 1;
         gbc.gridy = 0;
-        gbc.gridwidth = 3;
+        gbc.gridwidth = 4;
         gbc.fill = GridBagConstraints.VERTICAL;
         root.add(spacer5, gbc);
-        version = new JLabel();
-        version.setText("v%s (发布于%s)");
-        gbc = new GridBagConstraints();
-        gbc.gridx = 3;
-        gbc.gridy = 1;
-        gbc.anchor = GridBagConstraints.WEST;
-        root.add(version, gbc);
         final JPanel spacer6 = new JPanel();
         gbc = new GridBagConstraints();
-        gbc.gridx = 2;
-        gbc.gridy = 1;
+        gbc.gridx = 1;
+        gbc.gridy = 4;
+        gbc.weightx = 0.3;
         gbc.fill = GridBagConstraints.HORIZONTAL;
         root.add(spacer6, gbc);
-        confirmButton = new JButton();
-        confirmButton.setEnabled(true);
-        Font confirmButtonFont = this.$$$getFont$$$(null, -1, -1, confirmButton.getFont());
-        if (confirmButtonFont != null) {
-            confirmButton.setFont(confirmButtonFont);
-        }
-        confirmButton.setMargin(new Insets(0, 0, 0, 0));
-        confirmButton.setPreferredSize(new Dimension(78, 36));
-        confirmButton.setSelected(false);
-        confirmButton.setText("确定");
-        confirmButton.setVisible(true);
+        exit = new JButton();
+        exit.setMargin(new Insets(0, 0, 0, 0));
+        exit.setMaximumSize(new Dimension(82, 40));
+        exit.setMinimumSize(new Dimension(82, 40));
+        exit.setPreferredSize(new Dimension(82, 40));
+        exit.setText("退出游戏");
         gbc = new GridBagConstraints();
-        gbc.gridx = 1;
-        gbc.gridy = 5;
-        gbc.gridwidth = 3;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.ipadx = 10;
-        gbc.ipady = 5;
-        root.add(confirmButton, gbc);
-        final JPanel spacer7 = new JPanel();
+        gbc.gridx = 2;
+        gbc.gridy = 4;
+        root.add(exit, gbc);
+        close = new JButton();
+        close.setEnabled(true);
+        Font closeFont = this.$$$getFont$$$(null, -1, -1, close.getFont());
+        if (closeFont != null) {
+            close.setFont(closeFont);
+        }
+        close.setMargin(new Insets(0, 0, 0, 0));
+        close.setMaximumSize(new Dimension(106, 40));
+        close.setMinimumSize(new Dimension(106, 40));
+        close.setPreferredSize(new Dimension(106, 40));
+        close.setSelected(false);
+        close.setText("继续启动");
+        close.setVisible(true);
         gbc = new GridBagConstraints();
         gbc.gridx = 3;
         gbc.gridy = 4;
-        gbc.fill = GridBagConstraints.VERTICAL;
-        root.add(spacer7, gbc);
+        gbc.insets = new Insets(0, 5, 0, 0);
+        root.add(close, gbc);
     }
 
     /**

@@ -59,7 +59,6 @@ public final class MultiThreadDownloader {
         }
 
         executor.shutdownNow();
-        executor.close();
     }
 
     public interface ProgressCallback {

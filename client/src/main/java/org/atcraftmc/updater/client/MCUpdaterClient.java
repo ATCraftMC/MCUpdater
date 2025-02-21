@@ -4,13 +4,14 @@ import com.google.gson.JsonParser;
 import me.gb2022.commons.http.HttpMethod;
 import me.gb2022.commons.http.HttpRequest;
 import org.atcraftmc.updater.FilePath;
+import org.atcraftmc.updater.client.ui.ErrorUI;
 import org.atcraftmc.updater.client.ui.ProgressUI;
 import org.atcraftmc.updater.client.ui.UpdateViewingUI;
+import org.atcraftmc.updater.client.util.UIHandle;
 import org.atcraftmc.updater.command.UpdateOperationListener;
 import org.atcraftmc.updater.command.VersionInfo;
 import org.atcraftmc.updater.command.operation.PatchOperation;
 
-import javax.swing.*;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -88,7 +89,29 @@ public interface MCUpdaterClient {
         UpdateViewingUI.view(info.getVersion(), text, info.getTimeStamp());
     }
 
-    static void run(UpdateOperationListener ctx, JFrame window) {
+    static void run() {
+        var lock = new ArrayBlockingQueue<>(1);
+
+        ProgressUI.open((handle) -> {
+            try {
+                run(handle);
+            } catch (Exception e) {
+                handle.close();
+                ErrorUI.open(e);
+            }
+            lock.add(new Object());
+        });
+
+        try {
+            lock.take();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    static void run(UIHandle<ProgressUI> handle) {
+        var ctx = handle.ui();
+
         ctx.setCommentMessage("正在下载版本信息...");
         ctx.setProgress(100);
 
@@ -97,8 +120,8 @@ public interface MCUpdaterClient {
 
             ClientBootstrap.notify("客户端初始化完成", "客户端资源已下载并安装。");
             showVersionLog(getLatestVersion());
-            window.setVisible(false);
             setTimeStamp(getLatestVersion().getTimeStamp());
+            handle.close();
             return;
         }
 
@@ -106,12 +129,12 @@ public interface MCUpdaterClient {
 
         if (versions.isEmpty()) {
             ClientBootstrap.notify("客户端已经为最新版本", "当前客户端版本已为最新, 游戏进程准备启动。");
-            window.setVisible(false);
+            handle.close();
             return;
         }
 
         for (var i = 0; i < versions.size(); i++) {
-            window.setTitle("MCUpdater - 正在安装第 (%d/%d) 个版本更新".formatted(i + 1, versions.size()));
+            handle.frame().setTitle("MCUpdater - 正在安装第 (%d/%d) 个版本更新".formatted(i + 1, versions.size()));
 
             for (var operations : versions.get(i).getOperations()) {
                 try {
@@ -122,31 +145,10 @@ public interface MCUpdaterClient {
                 }
             }
 
-            showVersionLog(versions.getLast());
+            handle.close();
+
+            showVersionLog(versions.get(versions.size() - 1));
             ClientBootstrap.notify("客户端已经更新完成", "当前客户端版本已为最新, 游戏进程准备启动。");
-            window.setVisible(false);
-        }
-    }
-
-    static void run() {
-        var lock = new ArrayBlockingQueue<>(1);
-
-        ProgressUI.open("MCUpdater", (ctx, window) -> {
-            try {
-                run(ctx, window);
-            } catch (Exception e) {
-                e.printStackTrace();
-                JOptionPane.showMessageDialog(null, e.getMessage(), "发生错误!", JOptionPane.ERROR_MESSAGE);
-                window.setVisible(false);
-            }
-
-            lock.add(new Object());
-        });
-
-        try {
-            lock.take();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
         }
     }
 }
