@@ -1,23 +1,29 @@
-package org.atcraftmc.updater.server.diffcheck;
+package org.atcraftmc.updater.data;
 
 import me.gb2022.commons.container.Pair;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.atcraftmc.updater.FilePath;
 import org.atcraftmc.updater.PatchFile;
 import org.atcraftmc.updater.command.VersionInfo;
 import org.atcraftmc.updater.command.operation.DeleteOperation;
 import org.atcraftmc.updater.command.operation.PatchOperation;
+import org.atcraftmc.updater.data.diff.DiffCheck;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.*;
 
 public final class FileManager {
-    private final Set<Repository> sources = new HashSet<>();
+    public static final Logger LOGGER = LogManager.getLogger("文件服务");
 
-    public Set<Repository> getSources() {
-        return sources;
+    private final Map<String, Repository> sources = new HashMap<>();
+
+    public Collection<Repository> getSources() {
+        return sources.values();
     }
 
     public void init() {
@@ -28,16 +34,17 @@ public final class FileManager {
         }
     }
 
-    public Map<String, Pair<File, FileModifyStatus>> checkFiles() {
+    public Map<String, Pair<FileData, FileModifyStatus>> checkFiles() {
         var checkList = new HashSet<String>();
-        var map = new HashMap<String, Pair<File, FileModifyStatus>>();
+        var map = new HashMap<String, Pair<FileData, FileModifyStatus>>();
 
-        for (var repo : this.sources) {
+        for (var rid : this.sources.keySet()) {
+            var repo = this.sources.get(rid);
             for (var file : repo.collect()) {
                 var resPath = repo.pathOf(file);
                 var state = DiffCheck.checkFile(file, repo, checkList);
 
-                map.put(resPath, new Pair<>(file, state));
+                map.put(resPath, new Pair<>(new FileData(rid, resPath), state));
             }
         }
 
@@ -62,8 +69,64 @@ public final class FileManager {
         return map;
     }
 
+    public ModernVersionInfo createVersion(String id) {
+        var time = System.currentTimeMillis();
 
-    //create update command and create patches for update/add resource
+        LOGGER.info("开始生成版本 {} (打包时间戳 {} / {})", id, new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()), time);
+        LOGGER.info("开始分析文件差异....");
+
+        var fileStatus = checkFiles();
+
+        var deleteFiles = new HashSet<String>();
+        var addFiles = new HashMap<String, FileData>();
+
+        LOGGER.info("检查完成，源内共 {} 个文件", fileStatus.size());
+
+        if (fileStatus.values().stream().allMatch((p) -> p.getRight() == FileModifyStatus.NONE)) {
+            LOGGER.error("没有任何变更的文件!");
+            throw new IllegalStateException("no changes!");
+        }
+
+        for (var path : fileStatus.keySet()) {
+            var pair = fileStatus.get(path);
+            var file = pair.getLeft();
+            var state = pair.getRight();
+
+            if (state == FileModifyStatus.DELETE) {
+                LOGGER.info("[D]{}", path);
+                deleteFiles.add(path);
+            }
+            if (state == FileModifyStatus.ADD) {
+                LOGGER.info("[A]{}", path);
+                addFiles.put(path, file);
+            }
+            if (state == FileModifyStatus.UPDATE) {
+                LOGGER.info("[U]{}", path);
+                addFiles.put(path, file);
+            }
+        }
+
+        LOGGER.info("完成!");
+
+        return new ModernVersionInfo(id, time, addFiles, deleteFiles);
+    }
+
+    public ModernVersionInfo createInstallDummyVersion(){
+        var map = new HashMap<String, FileData>();
+
+        for (var rid : this.sources.keySet()) {
+            var repo = this.sources.get(rid);
+            for (var file : repo.collect()) {
+                var resPath = repo.pathOf(file);
+
+                map.put(resPath, new FileData(rid, resPath));
+            }
+        }
+
+        return new ModernVersionInfo("_install", 0, map, new HashSet<>());
+    }
+
+    @Deprecated
     public VersionInfo generate(String version) {
         long last = System.currentTimeMillis();
 
@@ -88,11 +151,11 @@ public final class FileManager {
             }
             if (state == FileModifyStatus.ADD) {
                 System.out.println("[A]" + path);
-                addFiles.put(path, file);
+                addFiles.put(path, file.file(this));
             }
             if (state == FileModifyStatus.UPDATE) {
                 System.out.println("[U]" + path);
-                addFiles.put(path, file);
+                addFiles.put(path, file.file(this));
             }
         }
 
@@ -134,16 +197,21 @@ public final class FileManager {
         return command;
     }
 
+    @Deprecated
     public void createInstallerZip() {
         var zip = new File(FilePath.packs() + "/installer.zip");
         var addFiles = new HashMap<String, File>();
 
-        for (var repo : this.sources) {
+        for (var repo : this.getSources()) {
             for (var file : repo.collect()) {
                 addFiles.put(repo.pathOf(file), file);
             }
         }
 
         PatchFile.zip(zip, addFiles);
+    }
+
+    public Map<String, Repository> getRegisteredSources() {
+        return sources;
     }
 }

@@ -1,11 +1,11 @@
-package org.atcraftmc.updater.server.diffcheck;
+package org.atcraftmc.updater.data.diff;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.PatternSyntaxException;
 
-public class GitIgnoreFilter {
+public final class GitIgnoreFilter {
     private final String[] patterns;
 
     public GitIgnoreFilter(String... patterns) {

@@ -4,23 +4,38 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpServer;
+import io.netty.channel.ChannelHandlerContext;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.atcraftmc.updater.FilePath;
-import org.atcraftmc.updater.server.diffcheck.FileManager;
-import org.atcraftmc.updater.server.diffcheck.GitIgnoreFilter;
-import org.atcraftmc.updater.server.diffcheck.Repository;
-import org.atcraftmc.updater.server.http.PatchFileProvider;
-import org.atcraftmc.updater.server.http.VersionHistoryProvider;
-import org.atcraftmc.updater.server.http.VersionInfoProvider;
+import org.atcraftmc.updater.data.FileManager;
+import org.atcraftmc.updater.data.Repository;
+import org.atcraftmc.updater.data.diff.GitIgnoreFilter;
+import org.atcraftmc.updater.protocol.*;
+import org.atcraftmc.updater.server.service.ConsoleService;
+import org.atcraftmc.updater.server.service.NetworkService;
+import org.bukkit.configuration.InvalidConfigurationException;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.*;
-import java.net.InetSocketAddress;
 import java.util.Objects;
-import java.util.Scanner;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-public class MCUpdaterServer {
+public final class MCUpdaterServer {
+    public static final Logger LOGGER = LogManager.getLogger("");
+    private final ConsoleService console = new ConsoleService(this);
+    private final NetworkService network = new NetworkService(this);
+
+
+    private final ExecutorService executor = Executors.newCachedThreadPool();
     private final FileManager fileManager = new FileManager();
     private final VersionManager versionManager = new VersionManager();
     private final HttpServer server;
+
+    private final FileConfiguration config = new YamlConfiguration();
+
 
     public MCUpdaterServer() {
         try {
@@ -30,21 +45,49 @@ public class MCUpdaterServer {
         }
     }
 
+    public boolean loadConfiguration() {
+        var file = new File(FilePath.runtime() + "/config.yml");
+
+        if (!file.exists() || file.length() == 0) {
+            LOGGER.warn("没有找到默认的配置文件，正在覆盖生成...");
+
+            try (var out = new FileOutputStream(file); var in = this.getClass().getResourceAsStream("/config.yml")) {
+                out.write(Objects.requireNonNull(in).readAllBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
+            LOGGER.info("配置文件生成于 {}", file.getAbsolutePath());
+
+            return false;
+        }
+
+        try {
+            this.config.load(file);
+            return true;
+        } catch (IOException | InvalidConfigurationException e) {
+            LOGGER.warn("读取配置文件时发生错误!");
+            LOGGER.catching(e);
+
+            return false;
+        }
+    }
+
+
     public void init() {
-        var scanner = new Scanner(System.in);
+        this.console.start();
+        this.console.waitFor();
 
-        System.out.println("======[MCUpdater Server v1.0.0]======");
-        System.out.println(" - 'make <version>': 生成更新");
-        System.out.println(" - 'stop': 停止服务器");
-        System.out.println(" - 'reload': 重新加载配置(网络服务器修改需要重启)");
-        System.out.println(" - 'list': 列出全部版本");
+        if (!loadConfiguration()) {
+            LOGGER.warn("读取配置文件时遇到了一些问题，请重新配置并启动服务器。");
+            System.exit(1);
+        }
 
-        System.out.println("正在加载版本信息...");
+        LOGGER.info("正在加载版本信息...");
         this.versionManager.load();
-        System.out.printf("共加载了 %s 个版本%n", this.versionManager.getVersions().size());
+        LOGGER.info("共加载了 {} 个版本", this.versionManager.getVersions().size());
 
-
-        System.out.println("正在加载配置");
+        LOGGER.info("正在加载配置");
         var serverConfig = this.loadConfig().getAsJsonObject("server");
 
         this.fileManager.init();
@@ -52,91 +95,31 @@ public class MCUpdaterServer {
         var ip = serverConfig.get("bind").getAsString();
         var port = serverConfig.get("port").getAsInt();
 
-        try {
-            this.server.bind(new InetSocketAddress(ip, port), 1048576);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        setupServer(port);
 
-        this.server.createContext("/patch", new PatchFileProvider());
-        this.server.createContext("/log", new VersionHistoryProvider());
-        this.server.createContext("/version", new VersionInfoProvider(this.versionManager));
-
-        this.server.start();
-
-        System.out.printf("成功启动HTTP服务于 %s:%s%n", ip, port);
-        System.out.println("启动完成!");
-
-        // 持续监听用户输入，直到输入 "exit" 为止
-        while (true) {
-            var line = scanner.nextLine();
-            if (line.isEmpty() || line.isBlank()) {
-                continue;
-            }
-
-            var input = line.split(" ");
-
-            System.out.println(">> " + line);
-
-            if ("stop".equalsIgnoreCase(input[0])) {
-                this.stop();
-                break;
-            }
-
-            if ("make".equalsIgnoreCase(input[0])) {
-                if (input.length < 2) {
-                    System.out.println("错误: 请指定版本号");
-                    continue;
-                }
-
-                var version = input[1];
-
-                if (this.versionManager.hasVersion(version)) {
-                    System.out.println("错误: 版本号 %s 已经存在。");
-                    continue;
-                }
-
-                var path = FilePath.versions() + "/" + version + ".txt";
-                var file = new File(path);
-
-                if (!file.exists() || file.length() == 0) {
-                    System.out.printf("警告: 版本 %s 对应的日志文件不存在或为空", version);
-                    System.out.printf("警告: 请创建文件 %s 并写入更新日志%n", path);
-                }
-
-                try {
-                    var vi = this.fileManager.generate(version);
-                    this.versionManager.createVersion(vi);
-                } catch (IllegalStateException ignored) {
-                    System.out.println("没有更改发生, 版本生成终止。");
-                }
-            }
-
-            if ("reload".equalsIgnoreCase(input[0])) {
-                System.out.println("正在重新加载文件...");
-                this.loadConfig();
-                System.out.println("配置文件已经更新。HTTP服务需要重启才能应用修改。");
-            }
-        }
-
-        // 关闭 Scanner
-        scanner.close();
+        LOGGER.info("成功启动TCP服务于 {}:{}", ip, port);
+        LOGGER.info("启动完成!");
     }
 
     public void stop() {
-        System.out.println("正在关闭HTTP服务...");
         this.server.stop(0);
+        this.console.stop();
     }
 
     public JsonObject loadConfig() {
         var config = loadConfigDOM();
-        var sources = this.fileManager.getSources();
         config.getAsJsonObject("source").asMap().forEach((key, value) -> {
-            var path = key.startsWith(".") ? FilePath.runtime() + key.substring(1) : key;
-            var regex = value.getAsJsonArray().asList().stream().map(JsonElement::getAsString).distinct().toArray(String[]::new);
-            sources.add(new Repository(new File(path), new GitIgnoreFilter(regex)));
+            var node = value.getAsJsonObject();
+            var pathNode = node.get("path").getAsString();
+            var regexNode = node.get("ignore").getAsJsonArray();
 
-            System.out.println("> 添加数据源: " + path);
+            var path = pathNode.startsWith(".") ? FilePath.runtime() + pathNode.substring(1) : pathNode;
+            var regex = regexNode.asList().stream().map(JsonElement::getAsString).distinct().toArray(String[]::new);
+            var repo = new Repository(new File(path), new GitIgnoreFilter(regex));
+
+            this.fileManager.getRegisteredSources().put(key, repo);
+
+            LOGGER.info("添加数据源: {} -> {}", key, path);
         });
 
         return config;
@@ -164,4 +147,118 @@ public class MCUpdaterServer {
     public HttpServer getServer() {
         return server;
     }
+
+    public void setupServer(int port) {
+
+    }
+
+    public void makeUpdate(String[] args) {
+        if (args.length < 2) {
+            LOGGER.error("请指定版本号");
+            return;
+        }
+
+        var version = args[1];
+
+        if (this.versionManager.hasVersion(version)) {
+            LOGGER.error("版本号 {} 已经存在。", version);
+            return;
+        }
+
+        var path = FilePath.versions() + "/" + version + ".txt";
+        var file = new File(path);
+
+        if (!file.exists() || file.length() == 0) {
+            System.out.printf("警告: 版本 %s 对应的日志文件不存在或为空%n", version);
+            System.out.printf("警告: 请创建文件 %s 并写入更新日志%n", path);
+        }
+
+        try {
+            var vi = this.fileManager.generate(version);
+            this.versionManager.createVersion(vi);
+        } catch (IllegalStateException ignored) {
+            System.out.println("没有更改发生, 版本生成终止。");
+        }
+    }
+
+    public void cmd_build(String[] command) {
+        if (command.length < 2) {
+            LOGGER.error("请指定版本号");
+            return;
+        }
+
+        var version = command[1];
+
+        if (this.versionManager.hasVersion(version)) {
+            LOGGER.error("版本号 {} 已经存在。", version);
+            return;
+        }
+
+        try {
+            var vi = this.fileManager.createVersion(version);
+            this.versionManager.registerVersion(vi);
+            this.versionManager.registerVersion(this.fileManager.createInstallDummyVersion());
+        } catch (IllegalStateException ignored) {
+            LOGGER.error("没有文件更改，生成撤销。");
+        }
+    }
+
+    public String versionLog(String id) {
+        var f = new File(FilePath.versions() + "/" + id + ".txt");
+
+        if (!f.exists() || f.length() == 0) {
+            return "没有版本信息 :(";
+        }
+
+
+        try (var in = new FileInputStream(f)) {
+            return new String(in.readAllBytes());
+        } catch (Exception e) {
+            return "没有版本信息 :(";
+        }
+    }
+
+    public void handleVersion(P10_VersionInfo vi, ChannelHandlerContext ctx) {
+        var t = vi.getTimeStamp();
+
+        ctx.writeAndFlush(new P0F_ServerProgressUpdate("正在合并版本信息..."));
+
+        var version = versionManager.mergeFrom(t);
+
+        ctx.writeAndFlush(new P12_FileDelete(version.getRemoveList().toArray(new String[0])));
+
+        ctx.writeAndFlush(new P0F_ServerProgressUpdate("正在准备文件..."));
+        var totalSize = version.getAddList().values().stream().map((fd) -> fd.file(this.fileManager)).mapToLong(File::length).sum();
+
+        ctx.writeAndFlush(new P1F_UpdateProgressPredict(totalSize));
+        ctx.writeAndFlush(new P0F_ServerProgressUpdate("准备开始下载..."));
+
+        var size = 0;
+        var packet = new P11_FileExpand();
+
+        for (var data : version.getAddList().entrySet()) {
+            var file = data.getValue().file(this.fileManager);
+
+            try (var in = new FileInputStream(file)) {
+                var payload = in.readAllBytes();
+                size += payload.length;
+                packet.add(data.getKey(), payload);
+
+                if (size > 524288) {
+                    ctx.writeAndFlush(packet);
+                    packet = new P11_FileExpand();
+                    size = 0;
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        ctx.writeAndFlush(packet);
+        ctx.writeAndFlush(new P10_VersionInfo(version.getTimestamp(), version.getVersion(), versionLog(version.getVersion())));
+    }
+
+    public ExecutorService getExecutor() {
+        return this.executor;
+    }
+
 }

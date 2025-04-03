@@ -23,6 +23,13 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.12.1'
 
     implementation project(":common")
+
+    // https://mvnrepository.com/artifact/io.netty/netty-all
+    implementation 'io.netty:netty-all:4.1.119.Final'
+
+    implementation localStorage('me.gb2022.simpnet.simpnet-base')
+
+    implementation "org.apache.logging.log4j:log4j-core:2.8.1"
 }
 
 jar{

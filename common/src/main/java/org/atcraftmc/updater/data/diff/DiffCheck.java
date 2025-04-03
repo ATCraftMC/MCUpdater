@@ -1,7 +1,9 @@
-package org.atcraftmc.updater.server.diffcheck;
+package org.atcraftmc.updater.data.diff;
 
 import me.gb2022.commons.math.SHA;
 import org.atcraftmc.updater.FilePath;
+import org.atcraftmc.updater.data.FileModifyStatus;
+import org.atcraftmc.updater.data.Repository;
 
 import java.io.File;
 import java.io.FileInputStream;

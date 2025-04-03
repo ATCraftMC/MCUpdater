@@ -20,17 +20,22 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.12.1'
 
     implementation project(":common")
+
+    // https://mvnrepository.com/artifact/io.netty/netty-all
+    implementation 'io.netty:netty-all:4.1.119.Final'
+
+    implementation localStorage('me.gb2022.simpnet.simpnet-base')
 }
 
 sourceCompatibility = '17'
 targetCompatibility = '17'
 
-jar{
-    manifest{
-        attributes "Main-Class":"org.atcraftmc.updater.client.ClientBootstrap";
-        attributes "Premain-Class":"org.atcraftmc.updater.client.ClientBootstrap"
+jar {
+    manifest {
+        attributes "Main-Class": "org.atcraftmc.updater.client.ClientBootstrap";
+        attributes "Premain-Class": "org.atcraftmc.updater.client.ClientBootstrap"
     }
-    archiveBaseName="mc-updater-client"
+    archiveBaseName = "mc-updater-client"
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
 
     from {

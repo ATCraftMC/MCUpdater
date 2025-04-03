@@ -1,5 +1,7 @@
-package org.atcraftmc.updater.server.diffcheck;
+package org.atcraftmc.updater.data;
 
+
+import org.atcraftmc.updater.data.diff.GitIgnoreFilter;
 
 import java.io.File;
 import java.util.Collection;

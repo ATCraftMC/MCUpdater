@@ -20,12 +20,15 @@ public final class ErrorUI extends UI<ErrorUI> {
         this.exit.addActionListener(actionEvent -> System.exit(0));
         this.close.addActionListener(actionEvent -> this.handle().close());
         this.text.setEditable(false);
+        this.text.setLineWrap(true);
 
         var builder = new StringBuilder();
         var message = throwable.getMessage();
 
         if (throwable instanceof ConnectException || message.contains("Connection refused")) {
             builder.append("无法连接到更新服务器, 请检查网络或联系管理员。\n\n");
+            this.text.setText(builder.toString());
+            return;
         } else {
             builder.append(message).append("发生了内部错误, 请向管理员反馈情况。\n");
         }
@@ -56,7 +59,7 @@ public final class ErrorUI extends UI<ErrorUI> {
     public void build(JFrame frame) {
         frame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
         frame.setContentPane(this.root);
-        frame.setSize(600, 800);
+        frame.setSize(600, 400);
         frame.setResizable(false);
     }
 

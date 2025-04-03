@@ -16,6 +16,7 @@ public final class UpdateViewingUI {
     public UpdateViewingUI(String version, String log, long timestamp) {
         this.version.setText(this.version.getText().formatted(version, new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(timestamp)));
         this.text.setText(log);
+        this.text.setLineWrap(true);
     }
 
     public static void view(String version, String log, long timestamp) {

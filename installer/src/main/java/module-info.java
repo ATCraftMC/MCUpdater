@@ -1,3 +1,0 @@
-module JInstaller.main {
-
-}

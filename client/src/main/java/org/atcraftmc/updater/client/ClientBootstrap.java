@@ -3,6 +3,8 @@ package org.atcraftmc.updater.client;
 import com.formdev.flatlaf.FlatDarkLaf;
 import me.gb2022.commons.container.Vector;
 import org.atcraftmc.updater.FilePath;
+import org.atcraftmc.updater.client.util.ApplicationEntry;
+import org.atcraftmc.updater.client.util.Log;
 
 import javax.swing.*;
 import java.awt.*;
@@ -11,37 +13,47 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.instrument.Instrumentation;
-import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
 public interface ClientBootstrap {
-    Vector<String> SERVICE = new Vector<>("5122921b-1a41-6358-f9e9-2cd7ef5fef60.ofalias.com:37044");
+    Vector<ClientConfig> CLIENT_CONFIG = new Vector<>(null);
 
-    //javaagent entrypoint
+    @ApplicationEntry
     static void premain(String agentArgs, Instrumentation inst) {
-        boot(agentArgs);
+        boot();
     }
 
+    @ApplicationEntry
     static void main(String[] args) {
-        boot(args[0]);
+        boot();
     }
 
-    static void boot(String service) {
-        var file = new File(FilePath.updater() + "/client-service.txt");
+    static void boot() {
+        var file = new File(FilePath.updater() + "/mcu-client.properties");
 
-        if (file.exists() && file.length() > 0) {
-            try (var in = new FileInputStream(file)) {
-                service = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+        if (!file.exists() || file.length() == 0) {
+            Log.error("config file does not exist.");
+            error("发生错误", "没有找到客户端配置文件!");
         }
 
-        SERVICE.set(service);
-        FilePath.SERVER.set(service);
+        var config = new Properties();
+        try (var in = new FileInputStream(file)) {
+            config.load(in);
+        } catch (IOException e) {
+            Log.error("cannot read config file", e);
+            error("发生错误", "无法读取客户端配置文件");
+        }
+
+        CLIENT_CONFIG.set(new ClientConfig(
+                config.getProperty("brand"),
+                config.getProperty("service")
+        ));
+
+        Log.info("client-brand: " + config().brand());
+        Log.info("service: " + config().service());
 
         theme();
-        MCUpdaterClient.run();
+        new MCUpdaterClient().run();
     }
 
     static void notify(String title, String message) {
@@ -64,7 +76,7 @@ public interface ClientBootstrap {
         }
 
         TrayIcon trayIcon = tray.getTrayIcons()[0];
-        trayIcon.displayMessage(title, message, TrayIcon.MessageType.NONE);
+        trayIcon.displayMessage(title, message, TrayIcon.MessageType.INFO);
         tray.remove(trayIcon);
     }
 
@@ -82,5 +94,13 @@ public interface ClientBootstrap {
         } catch (Exception ex) {
             System.err.println("Failed to initialize LaF");
         }
+    }
+
+    static ClientConfig config() {
+        return CLIENT_CONFIG.get();
+    }
+
+    static void error(String title, String desc) {
+        JOptionPane.showMessageDialog(null, desc, title, JOptionPane.ERROR_MESSAGE);
     }
 }
