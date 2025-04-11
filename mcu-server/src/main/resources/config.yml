@@ -1,0 +1,44 @@
+config:
+  server-address: 127.0.0.1 #服务器绑定的地址，一般不动
+  server-port: 65321 #服务器网络端口
+  channels: #更新频道列表
+    server: #更新频道的唯一ID
+      required: true #是否强制安装，不填写默认为false
+      name: 服务端资源(默认)
+      desc: 默认的服务端核心玩法资源。
+      path: "E:/Java/Projects/MCUpdater/test/server/server"
+      filter-block: [] #优先于所有屏蔽器的强制屏蔽，选填
+      filter-reject: #拒绝的路径前缀
+        - "/version/"
+        - "/plugins/"
+        - "/libraries/"
+        - "/configs/"
+        - "/config/"
+        - "/mohist-config/"
+        - "/banner-config/"
+        - "/youer-config/"
+        - "/bukkit.yml"
+        - "/spigot.yml"
+        - "/paper.yml"
+        - "/purpur.yml"
+        - "/server.properties"
+        - "/start.bat"
+        - "/start.sh"
+        - "/eula.txt"
+        - "/start.bat"
+      filter-add: #允许的路径前缀，最后执行（优先级高于拒绝）
+        - "/mods" 
+    client-enforced: #预配的客户端资源，可以在这里快速配置你的客户端必装内容
+      required: true
+      name: 客户端资源(默认)
+      desc: 默认的服务端必备资源。
+      path: "E:/Java/Projects/MCUpdater/test/server/server-client"
+    client-optional:
+      required: false
+      name: 客户端资源(选配)
+      desc: 客户端的可选扩展资源。
+      path: "E:/Java/Projects/MCUpdater/test/server/server-client"
+      filter-reject: ["/"]
+      filter-add:
+        - "/resourcepacks"
+        - "/shaderpack"

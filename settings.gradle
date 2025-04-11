@@ -1,6 +1,5 @@
 rootProject.name = 'MCUpdater'
-include 'client'
-include 'server'
-include 'common'
-include 'installer'
+include 'mcu-client'
+include 'mcu-server'
+include 'mcu-common'
 
