@@ -100,8 +100,8 @@ public final class MCUpdaterClient {
             throw new RuntimeException(e);
         }
 
-        if(request[0]) {
-           return;
+        if (request[0]) {
+            return;
         }
 
         this.mainWindowUI.frame().removeKeyListener(listener);
@@ -115,7 +115,7 @@ public final class MCUpdaterClient {
         ClientBootstrap.notify("客户端更新异常", "发生了一些错误。");
     }
 
-    private void handleVersionInfo(P10_VersionInfo v) {
+    private void handleUpdateComplete(P10_VersionInfo v) {
         var updated = false;
 
         for (var vv : v.getInfos()) {
@@ -129,14 +129,14 @@ public final class MCUpdaterClient {
         this.info.save();
 
         if (!updated) {
-            ClientBootstrap.notify(ClientBootstrap.config().brand()+" 客户端暂无更新", "当前所有资源包为最新版本。");
+            ClientBootstrap.notify(ClientBootstrap.config().brand() + " 客户端暂无更新", "当前所有资源包为最新版本。");
             this.mainWindowUI.close();
             this.lock.add(new Object());
             return;
         }
 
         UpdateViewingUI.view(v.getInfos());
-        ClientBootstrap.notify(ClientBootstrap.config().brand()+" 客户端更新完成", "所有资源包均已更新到最新版本。");
+        ClientBootstrap.notify(ClientBootstrap.config().brand() + " 客户端更新完成", "所有资源包均已更新到最新版本。");
         this.mainWindowUI.close();
         this.lock.add(new Object());
     }
@@ -154,7 +154,7 @@ public final class MCUpdaterClient {
                 ui.setCommentMessage(args[0].toString());
             }
             case CONNECT_SUCCESS -> this.handleConnectionSuccess();
-            case RECEIVE_VERSION -> this.handleVersionInfo((P10_VersionInfo) args[0]);
+            case RECEIVE_VERSION -> this.handleUpdateComplete((P10_VersionInfo) args[0]);
             case EXCEPTION -> this.handleError((Throwable) args[0]);
         }
     }

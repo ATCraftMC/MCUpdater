@@ -59,27 +59,7 @@ public interface ClientBootstrap {
     }
 
     static void notify(String title, String message) {
-        if (!SystemTray.isSupported()) {
-            return;
-        }
-
-        SystemTray tray = SystemTray.getSystemTray();
-
-        if (tray.getTrayIcons().length == 0) {
-            var systemTray = SystemTray.getSystemTray();
-            var popupMenu = new PopupMenu();
-            var trayIcon = new TrayIcon(new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB), "Updater", popupMenu);
-
-            try {
-                systemTray.add(trayIcon);
-            } catch (AWTException e) {
-                e.printStackTrace();
-            }
-        }
-
-        TrayIcon trayIcon = tray.getTrayIcons()[0];
-        trayIcon.displayMessage(title, message, TrayIcon.MessageType.INFO);
-        tray.remove(trayIcon);
+        NotificationService.getInstance().notify(title, message);
     }
 
     static void theme() {
