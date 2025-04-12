@@ -1,8 +1,9 @@
 config:
   server-address: 127.0.0.1 #服务器绑定的地址，一般不动
   server-port: 65321 #服务器网络端口
+  patch-slice-size: 32768 #发送更新数据包时的切片的大小(可选)
   channels: #更新频道列表
-    server: #更新频道的唯一ID
+    server: #更新频道的唯一ID 服务端目录建议直接修改path为你的Minecraft服务端路径即可
       required: true #是否强制安装，不填写默认为false
       name: 服务端资源(默认)
       desc: 默认的服务端核心玩法资源。
