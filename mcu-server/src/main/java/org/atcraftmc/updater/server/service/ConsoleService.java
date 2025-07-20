@@ -54,6 +54,7 @@ public final class ConsoleService extends Service {
         LOGGER.info(" - reload: 重新加载服务器配置");
         LOGGER.info(" - help: 显示帮助信息");
         LOGGER.info(" - build <频道> <版本>: 构建版本");
+        LOGGER.info(" - cdn-upload: 上传所有本地资源包");
     }
 
     @Override
@@ -73,6 +74,10 @@ public final class ConsoleService extends Service {
                 LOGGER.info("正在重新加载配置文件...");
                 server().loadConfiguration();
                 LOGGER.info("配置文件已经更新。网络服务需要重启才能应用修改。");
+            }
+            case "cdn-upload" -> {
+                LOGGER.info("正在上传全部本地资源...");
+                server().uploadPacks();
             }
         }
     }

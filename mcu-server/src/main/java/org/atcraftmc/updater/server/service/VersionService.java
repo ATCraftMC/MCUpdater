@@ -137,7 +137,7 @@ public final class VersionService extends Service {
         LOGGER.info("正在更新安装资源包...");
 
         PatchFile.zip(zipFile, files);
-
+        this.server().cdn.planUpload(channel + "_" + "__install");
         return new VersionInfo(channel, "__install", System.currentTimeMillis(), new HashSet<>(), new HashSet<>(), Set.of(pid));
     }
 
@@ -204,5 +204,15 @@ public final class VersionService extends Service {
 
 
         return VersionInfo.ofMerged(data);
+    }
+
+    public List<VersionInfo> all() {
+        var result = new ArrayList<VersionInfo>();
+
+        for (var map: this.versions.values()){
+            result.addAll(map.values());
+        }
+
+        return result;
     }
 }

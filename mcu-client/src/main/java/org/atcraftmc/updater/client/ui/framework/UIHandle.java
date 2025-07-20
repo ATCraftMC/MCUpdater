@@ -46,7 +46,7 @@ public final class UIHandle<I extends UI<I>> {
     public void close() {
         this.frame.setVisible(false);
         this.frame.dispose();
-        //this.frame.dispatchEvent(new WindowEvent(this.frame, WindowEvent.WINDOW_CLOSING));
+        this.frame.dispatchEvent(new WindowEvent(this.frame, WindowEvent.WINDOW_CLOSING));
     }
 
     public void setCloseCallback(Runnable cb) {

@@ -5,8 +5,8 @@ import me.gb2022.simpnet.packet.Packet;
 import me.gb2022.simpnet.packet.PacketInboundHandler;
 import org.atcraftmc.updater.channel.UpdateChannelMeta;
 import org.atcraftmc.updater.client.util.Log;
-import org.atcraftmc.updater.protocol.P22_UpdateChannelDataRequest;
-import org.atcraftmc.updater.protocol.P23_UpdateChannelList;
+import org.atcraftmc.updater.protocol.packet.P22_UpdateChannelDataRequest;
+import org.atcraftmc.updater.protocol.packet.P23_UpdateChannelList;
 
 import java.util.Set;
 import java.util.function.Consumer;

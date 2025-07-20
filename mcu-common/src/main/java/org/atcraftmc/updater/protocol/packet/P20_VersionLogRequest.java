@@ -1,4 +1,4 @@
-package org.atcraftmc.updater.protocol;
+package org.atcraftmc.updater.protocol.packet;
 
 import io.netty.buffer.ByteBuf;
 import me.gb2022.simpnet.packet.DeserializedConstructor;

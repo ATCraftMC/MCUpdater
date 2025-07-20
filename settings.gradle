@@ -2,4 +2,5 @@ rootProject.name = 'MCUpdater'
 include 'mcu-client'
 include 'mcu-server'
 include 'mcu-common'
+include 'mcu-cdn'
 

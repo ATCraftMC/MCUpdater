@@ -1,6 +1,5 @@
 package org.atcraftmc.updater.server;
 
-import com.sun.net.httpserver.HttpServer;
 import io.netty.channel.ChannelHandlerContext;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -8,17 +7,17 @@ import org.atcraftmc.updater.FilePath;
 import org.atcraftmc.updater.PatchFile;
 import org.atcraftmc.updater.channel.VersionInfo;
 import org.atcraftmc.updater.data.FileModifyStatus;
-import org.atcraftmc.updater.protocol.*;
-import org.atcraftmc.updater.server.service.ConsoleService;
-import org.atcraftmc.updater.server.service.FileService;
-import org.atcraftmc.updater.server.service.NetworkService;
-import org.atcraftmc.updater.server.service.VersionService;
+import org.atcraftmc.updater.data.diff.DiffCheck;
+import org.atcraftmc.updater.protocol.packet.*;
+import org.atcraftmc.updater.server.service.*;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.security.NoSuchAlgorithmException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
@@ -27,16 +26,13 @@ import java.util.stream.Collectors;
 
 public final class MCUpdaterServer {
     public static final Logger LOGGER = LogManager.getLogger("Server");
-
     private final FileConfiguration config = new YamlConfiguration();
-
     private final FileService fileService = new FileService(this);
     private final ConsoleService console = new ConsoleService(this);
     private final NetworkService network = new NetworkService(this);
     private final VersionService version = new VersionService(this, this.fileService);
-
     private final ExecutorService executor = Executors.newCachedThreadPool();
-
+    public CDNService cdn;
 
     public boolean loadConfiguration() {
         var file = new File(FilePath.runtime() + "/config.yml");
@@ -79,17 +75,24 @@ public final class MCUpdaterServer {
         this.fileService.start();
         this.version.start();
         this.network.start();
+        this.cdn = new CDNService(this);
+        this.cdn.start();
     }
 
     public void stop() {
         this.console.stop();
         this.network.stop();
+        this.cdn.stop();
     }
 
     public void buildVersion(String[] command) {
         if (command.length < 3) {
             LOGGER.error("正确用法: build <频道> <版本>");
             return;
+        }
+
+        if (this.cdn.isUploading()) {
+            LOGGER.error("请等待CDN上传任务全部结束后再制作版本! ");
         }
 
         var channel = command[1];
@@ -156,6 +159,29 @@ public final class MCUpdaterServer {
         LOGGER.info("版本已创建: {}-{} 打包时间: {}", channel, version, new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(time));
     }
 
+    public void uploadPacks() {
+        for (var v : versions().all()) {
+            for (var p : v.resourcePack()) {
+                var f = new File(FilePath.runtime() + "/packs/" + p + ".zip");
+
+                String sha256;
+                try {
+                    sha256 = new String(DiffCheck.calculateSHA256(f.getAbsolutePath()), StandardCharsets.UTF_8);
+                } catch (IOException | NoSuchAlgorithmException e) {
+                    throw new RuntimeException(e);
+                }
+                var remoteSha256 = this.cdn.getCDNFileStatus(p + ".zip");
+
+                if (sha256.equals(remoteSha256)) {
+                    continue;
+                }
+
+                this.cdn.planUpload(p);
+            }
+        }
+        this.cdn.batchUpload();
+    }
+
     public String versionLog(String id) {
         var f = new File(FilePath.versions() + "/" + id + ".txt");
 
@@ -209,20 +235,42 @@ public final class MCUpdaterServer {
         ctx.writeAndFlush(packet);
     }
 
-    private void sendResourceFileResponse(ArrayList<String> resourcePacks, ChannelHandlerContext ctx) throws Exception {
+    private String sendResourceFileResponse(ArrayList<String> resourcePacks, ChannelHandlerContext ctx) throws Exception {
         ctx.writeAndFlush(new P0F_ServerProgressUpdate("准备下载资源包..."));
+
+        var cdnPacks = new HashSet<String>();
+        var enableCDN = config().getBoolean("cdn-server.enable", false);
 
         for (var pack : resourcePacks) {
             var file = new File(FilePath.runtime() + "/packs/" + pack + ".zip");
+            var id = pack + ".zip";
+
+            var rsum = this.cdn.getCDNFileStatus(id);
+            var sum = new String(DiffCheck.calculateSHA256(file.getAbsolutePath()), StandardCharsets.UTF_8);
+
+            if (sum.equals(rsum)) {
+                cdnPacks.add(pack);
+                continue;
+            } else {
+                if (enableCDN) {
+                    LOGGER.warn("有未上传的数据包，请使用 'cdn-upload' 指令手动同步！");
+                }
+            }
+
             LOGGER.info("start: {} - {}bytes", pack, file.length());
-
-            ctx.writeAndFlush(new P13_PatchFileInfo((int) file.length(), file.lastModified(), ""));
-
             sendPatchFile(file, ctx);
         }
+
+        var ip = config().getString("cdn-server.address");
+        var port = config().getInt("cdn-server.port");
+
+        var id = UUID.randomUUID().toString();
+        ctx.writeAndFlush(new P15_CDNDownloads(id, enableCDN ? ip : "_", port, this.cdn.getRepository(), cdnPacks));
+        return id;
     }
 
     private void sendPatchFile(File file, ChannelHandlerContext ctx) throws Exception {
+        ctx.writeAndFlush(new P13_PatchFileInfo((int) file.length(), file.lastModified(), ""));
         var slice = config().getInt("patch-slice-size", 8192);
         var buffer = new byte[slice];
         var fin = new FileInputStream(file);
@@ -232,7 +280,7 @@ public final class MCUpdaterServer {
         while ((length = bin.read(buffer)) != -1) {
             var data = new byte[length];
             System.arraycopy(buffer, 0, data, 0, length);
-            ctx.writeAndFlush(new P14_PatchFileSlice(data, 0));
+            ctx.writeAndFlush(new P14_PatchFileSlice(data, 0)).get();
         }
 
         ctx.writeAndFlush(new P14_PatchFileSlice(new byte[0], P14_PatchFileSlice.SIG_END));
@@ -278,13 +326,13 @@ public final class MCUpdaterServer {
 
             if (resourcePacks.isEmpty()) {
                 ctx.writeAndFlush(new P0F_ServerProgressUpdate("未发现资源包更新:("));
+                ctx.writeAndFlush(new P10_VersionInfo(result));
             } else {
-                this.sendResourceFileResponse(resourcePacks, ctx);
+                var id = this.sendResourceFileResponse(resourcePacks, ctx);
+                this.network.addCDNWaitingList(id, new P10_VersionInfo(result));
             }
-
-            ctx.writeAndFlush(new P10_VersionInfo(result));
         } catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.catching(e);
         }
     }
 

@@ -9,7 +9,7 @@ public interface ClientEventSource {
         MCUpdaterClient.INSTANCE.executor.submit(action);
     }
 
-    default MCUpdaterClient client(){
+    default MCUpdaterClient client() {
         return MCUpdaterClient.INSTANCE;
     }
 }

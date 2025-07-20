@@ -5,8 +5,8 @@ import me.gb2022.simpnet.packet.Packet;
 import org.atcraftmc.updater.FilePath;
 import org.atcraftmc.updater.client.util.DeferredTaskManager;
 import org.atcraftmc.updater.client.Event;
-import org.atcraftmc.updater.protocol.P11_FileExpand;
-import org.atcraftmc.updater.protocol.P12_FileDelete;
+import org.atcraftmc.updater.protocol.packet.P11_FileExpand;
+import org.atcraftmc.updater.protocol.packet.P12_FileDelete;
 
 import java.io.File;
 import java.io.FileOutputStream;

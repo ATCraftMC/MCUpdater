@@ -7,15 +7,16 @@ import org.atcraftmc.updater.PatchFile;
 import org.atcraftmc.updater.client.Event;
 import org.atcraftmc.updater.client.util.DeferredTaskManager;
 import org.atcraftmc.updater.client.util.Log;
-import org.atcraftmc.updater.protocol.P10_VersionInfo;
-import org.atcraftmc.updater.protocol.P13_PatchFileInfo;
-import org.atcraftmc.updater.protocol.P14_PatchFileSlice;
+import org.atcraftmc.updater.protocol.packet.P10_VersionInfo;
+import org.atcraftmc.updater.protocol.packet.P13_PatchFileInfo;
+import org.atcraftmc.updater.protocol.packet.P14_PatchFileSlice;
 
 import java.io.File;
 import java.io.RandomAccessFile;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public final class PatchFileHandler extends MCUNetHandler {
     private final Map<Long, File> downloadedFiles = new HashMap<>();
@@ -24,7 +25,7 @@ public final class PatchFileHandler extends MCUNetHandler {
     private long writeLength;
     private long totalLength;
     private long currentFileCreated;
-
+    private Consumer<File> receivedHandler = (f)->{};
 
     @Override
     public void handlePacket(Packet packet, ChannelHandlerContext ctx) throws Exception {
@@ -46,7 +47,7 @@ public final class PatchFileHandler extends MCUNetHandler {
 
             var wm = this.writeLength / 1048576;
             var tm = this.totalLength / 1048576;
-            var p = (int) ((float)this.writeLength / this.totalLength * 100);
+            var p = (int) ((float) this.writeLength / this.totalLength * 100);
 
             this.callEvent(Event.PROGRESS_WORKING, "正在下载更新资源包... %s/%sMB (%s)".formatted(wm, tm, p) + "%", wm, tm);
 
@@ -55,15 +56,21 @@ public final class PatchFileHandler extends MCUNetHandler {
 
                 this.downloadedFiles.put(this.currentFileCreated, this.file);
                 this.currentFileCreated = Long.MAX_VALUE;
+                this.receivedHandler.accept(this.file);
 
                 this.target = null;
                 this.file = null;
             }
         }
+
         if (packet instanceof P10_VersionInfo) {
             ctx.fireChannelRead(packet);
-            DeferredTaskManager.addFileTask(this::unzipFiles);
+            finish();
         }
+    }
+
+    public void finish(){
+        DeferredTaskManager.addFileTask(this::unzipFiles);
     }
 
     private void unzipFiles() {
@@ -73,16 +80,21 @@ public final class PatchFileHandler extends MCUNetHandler {
             var file = downloadedFiles.get(id);
             callEvent(Event.PROGRESS_WORKING, "正在解压资源包 (第%d/%d个)", count, this.downloadedFiles.size());
 
-            PatchFile.unzip(file, FilePath.runtime(), (w, a) -> {
-                callEvent(
-                        Event.PROGRESS_WORKING,
-                        "正在解压资源包 (第%d/%d个)" + " - 处理文件 %s/%s".formatted(w, a),
-                        count,
-                        this.downloadedFiles.size()
-                );
-            });
+            int finalCount = count;
+            PatchFile.unzip(file, FilePath.runtime(), (w, a) -> callEvent(
+                    Event.PROGRESS_WORKING,
+                    "正在解压资源包 (第%d/%d个) - 处理文件 %s/%s".formatted(finalCount, this.downloadedFiles.size(), w, a),
+                    finalCount,
+                    this.downloadedFiles.size()
+            ));
+
+            count++;
         }
 
         this.downloadedFiles.clear();
+    }
+
+    public void setReceivedCallback(Consumer<File> cb) {
+        this.receivedHandler = cb;
     }
 }

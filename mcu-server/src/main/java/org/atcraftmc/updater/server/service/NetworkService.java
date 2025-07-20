@@ -9,10 +9,13 @@ import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import me.gb2022.simpnet.packet.Packet;
 import me.gb2022.simpnet.packet.PacketInboundHandler;
-import org.atcraftmc.updater.protocol.*;
+import org.atcraftmc.updater.protocol.MCUProtocol;
+import org.atcraftmc.updater.protocol.packet.*;
 import org.atcraftmc.updater.server.MCUpdaterServer;
 import org.atcraftmc.updater.server.file.FileSource;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static org.atcraftmc.updater.server.MCUpdaterServer.LOGGER;
@@ -20,6 +23,7 @@ import static org.atcraftmc.updater.server.MCUpdaterServer.LOGGER;
 public final class NetworkService extends Service {
     private final NioEventLoopGroup bossGroup = new NioEventLoopGroup();
     private final NioEventLoopGroup workerGroup = new NioEventLoopGroup();
+    private final Map<String, P10_VersionInfo> waitingList = new ConcurrentHashMap<>();
 
     public NetworkService(MCUpdaterServer server) {
         super(server);
@@ -66,6 +70,10 @@ public final class NetworkService extends Service {
         this.workerGroup.shutdownGracefully();
     }
 
+    public void addCDNWaitingList(String id, P10_VersionInfo p10VersionInfo) {
+        this.waitingList.put(id, p10VersionInfo);
+    }
+
     private class NetHandler extends PacketInboundHandler {
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, Packet packet) {
@@ -83,7 +91,7 @@ public final class NetworkService extends Service {
 
             if (packet instanceof P20_VersionLogRequest p) {
                 LOGGER.info("received client version log request: {}", ctx.channel().remoteAddress());
-                ctx.writeAndFlush(new P21_VersionLogInfo(server().versionLog(p.getVersion())));
+                ctx.writeAndFlush(new org.atcraftmc.updater.protocol.packet.P21_VersionLogInfo(server().versionLog(p.getVersion())));
                 LOGGER.info("sent version log to client: {}", ctx.channel().remoteAddress());
                 return;
             }
@@ -94,7 +102,13 @@ public final class NetworkService extends Service {
                 return;
             }
 
-            ctx.disconnect();
+            if (packet instanceof P16_CDNDownloadComplete cc) {
+                var id = cc.getSessionId();
+                if(waitingList.containsKey(id)) {
+                    ctx.writeAndFlush(waitingList.get(id));
+                    waitingList.remove(id);
+                }
+            }
         }
     }
 }

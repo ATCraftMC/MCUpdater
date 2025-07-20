@@ -7,7 +7,7 @@ import org.atcraftmc.updater.client.ui.MainWindowUI;
 import org.atcraftmc.updater.client.ui.UpdateViewingUI;
 import org.atcraftmc.updater.client.ui.framework.UIHandle;
 import org.atcraftmc.updater.client.util.Log;
-import org.atcraftmc.updater.protocol.P10_VersionInfo;
+import org.atcraftmc.updater.protocol.packet.P10_VersionInfo;
 
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
@@ -24,6 +24,7 @@ public final class MCUpdaterClient {
     private final ClientInstallationInfo info = new ClientInstallationInfo();
     private final NetworkController networkController;
     private UIHandle<MainWindowUI> mainWindowUI;
+    private boolean completeView = false;
 
     public MCUpdaterClient() {
         var address = ClientBootstrap.config().service().split(":");
@@ -116,6 +117,11 @@ public final class MCUpdaterClient {
     }
 
     private void handleUpdateComplete(P10_VersionInfo v) {
+        if (this.completeView) {
+            return;
+        }
+        this.completeView = true;
+
         var updated = false;
 
         for (var vv : v.getInfos()) {

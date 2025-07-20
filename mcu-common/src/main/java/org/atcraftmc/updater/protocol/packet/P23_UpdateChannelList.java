@@ -1,4 +1,4 @@
-package org.atcraftmc.updater.protocol;
+package org.atcraftmc.updater.protocol.packet;
 
 import com.google.gson.JsonParser;
 import io.netty.buffer.ByteBuf;
